@@ -118,9 +118,7 @@
       <p class="note">Tips: Den ursprungliga bokaren kan <em>Acceptera</em> eller <em>Neka</em> en tjänstförfrågan. Spelutmaningar avgörs direkt av minispel.</p>
     </div>
 
-    <p class="note">Så funkar det: Klicka på <em>Boka denna plats</em> för att boka en av veckans 6 platser. 
-      Om minispel/tjänst är tillåtet kan andra utmana din bokning. 
-      Data synkas i realtid mellan alla som använder sidan.</p>
+    
   </div>
 
   <!-- Boka / Redigera Modal -->
@@ -159,7 +157,7 @@
       <p class="small">Ärlighetsprincipen: bara den som bokat bör släppa.</p>
       <div class="field"><label for="releaseName">Skriv namnet som står på bokningen för att bekräfta</label><input id="releaseName" type="text" placeholder="Ditt namn" /></div>
       <div class="row">
-        <button class="btn warn" id="releaseConfirm">Släpp</button>
+        <button class="btn warn" id="releaseConfirm">Släpp plats</button>
         <button class="btn" id="releaseCancel">Avbryt</button>
       </div>
     </div>
@@ -402,7 +400,7 @@
             challengeBtn.onclick = ()=>openChallenge(i, slot);
             foot.appendChild(challengeBtn);
           }
-          const releaseBtn = el('button','btn warn','Släpp');
+        const releaseBtn = el('button','btn warn','Släpp plats');
           releaseBtn.title = 'Bara samma namn bör släppa (ärlighetsprincipen)';
           releaseBtn.onclick = ()=>openRelease(i, slot);
           foot.appendChild(releaseBtn);
