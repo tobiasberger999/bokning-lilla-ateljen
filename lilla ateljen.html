@@ -252,6 +252,23 @@
       });
     }
 
+    async function sha256Hex(input){
+      const data = new TextEncoder().encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      const bytes = new Uint8Array(hash);
+      return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+
+    async function getGateCodeHash(){
+      let h = localStorage.getItem('gateCodeHash');
+      if(h) return h;
+      const code = prompt('Ange gemensam kod för att skriva ändringar:');
+      if(!code) throw new Error('Ingen kod angiven');
+      h = await sha256Hex(code);
+      localStorage.setItem('gateCodeHash', h);
+      return h;
+    }
+
     const LocalDB = {
       _mode:'local',
       load(){ return JSON.parse(localStorage.getItem('atelierBookings')||'{}'); },
@@ -316,16 +333,16 @@
           }catch(err){ console.warn('Moln-init misslyckades', err); setStorageChip('local'); return false; }
         },
         load(){ const wk=currentWeekKey(); ensureWeekSubscription(wk); return { ...bookingsCache }; },
-        save(obj){ const wk=currentWeekKey(); const slots = obj[wk]||Array.from({length:6},()=>null); return fs.collection('bookings').doc(wk).set({slots},{merge:false}); },
+        async save(obj){ const wk=currentWeekKey(); const slots = obj[wk]||Array.from({length:6},()=>null); const _codeHash = await getGateCodeHash(); return fs.collection('bookings').doc(wk).set({slots, _codeHash},{merge:false}); },
         challengesLoad(){ const wk=currentWeekKey(); ensureWeekSubscription(wk); return { [wk]: challengesCache[wk]||[] }; },
-        challengesSave(obj){ const wk=currentWeekKey(); const list=obj[wk]||[]; return fs.collection('challenges').doc(wk).set({list},{merge:false}); },
+        async challengesSave(obj){ const wk=currentWeekKey(); const list=obj[wk]||[]; const _codeHash = await getGateCodeHash(); return fs.collection('challenges').doc(wk).set({list, _codeHash},{merge:false}); },
         lbLoad(){ ensureLeaderboardSubscription(); return { ...leaderboardCache }; },
-        lbSave(map){ return fs.collection('meta').doc('leaderboard').set({scores: map},{merge:false}); },
+        async lbSave(map){ const _codeHash = await getGateCodeHash(); return fs.collection('meta').doc('leaderboard').set({scores: map, _codeHash},{merge:false}); },
         namesLoad: LocalDB.namesLoad,
         namesSave: LocalDB.namesSave,
         // Import/export hjälp för alla veckor
-        _saveWeek(wk, slots){ return fs.collection('bookings').doc(wk).set({slots},{merge:false}); },
-        _saveChallengesWeek(wk, list){ return fs.collection('challenges').doc(wk).set({list},{merge:false}); },
+        async _saveWeek(wk, slots){ const _codeHash = await getGateCodeHash(); return fs.collection('bookings').doc(wk).set({slots, _codeHash},{merge:false}); },
+        async _saveChallengesWeek(wk, list){ const _codeHash = await getGateCodeHash(); return fs.collection('challenges').doc(wk).set({list, _codeHash},{merge:false}); },
         async _exportAll(){
           const [bks, chs, lbDoc] = await Promise.all([
             fs.collection('bookings').get(),
