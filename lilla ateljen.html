@@ -404,14 +404,33 @@
       const savedCfgStr = localStorage.getItem('firebaseConfig');
       if(savedCfgStr){ try{ window.FIREBASE_CONFIG = JSON.parse(savedCfgStr); } catch(_){} }
     })();
-    // Initiera moln om konfig finns, och be om gemensam kod en gång
-    Cloud.initIfConfigured().then(async enabled=>{
-      if(enabled){
-        try{ await getGateCodeHash(); }catch(_){}
-        DB = Cloud;
+// Initiera moln om konfig finns, och kräv korrekt kod via helskärmsdialog innan interaktion
+Cloud.initIfConfigured().then(async enabled=>{
+  if(enabled){
+    show('#gateModal');
+    const codeInput = document.getElementById('gateCode');
+    const errorBox = document.getElementById('gateError');
+    const submitBtn = document.getElementById('gateSubmit');
+    async function attempt(){
+      const normalized = normalizeGateCode(codeInput.value);
+      const hash = await sha256Hex(normalized);
+      const ok = await Cloud.tryHash(hash);
+      if(ok){
+        localStorage.setItem('gateCodeHashV2', hash);
+        hide('#gateModal');
+        DB = Cloud; render();
+      } else {
+        errorBox.style.display='block';
+        codeInput.select();
       }
-      render();
-    });
+    }
+    submitBtn.onclick = attempt;
+    codeInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ attempt(); }});
+    codeInput.focus();
+    return; // block initial render until unlocked
+  }
+  render();
+});
 
     // --- State ---
     let currentWeek = startOfISOWeek(new Date());
