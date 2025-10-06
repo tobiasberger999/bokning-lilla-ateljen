@@ -95,9 +95,10 @@
       </div>
       <button class="btn ghost" id="todayBtn">Denna vecka</button>
       <div class="kbd" id="rangeLabel">Mån … – Sön …</div>
-      <span class="chip" title="Sparas bara lokalt">💾 Lokalt (denna webbläsare)</span>
+      <span class="chip" id="storageChip" title="Lagringsläge">💾 Lokalt</span>
       <button class="btn" id="exportBtn" title="Exportera data">Exportera</button>
       <label class="btn" for="importFile" title="Importera data">Importera<input id="importFile" type="file" accept="application/json" style="display:none"></label>
+      <button class="btn" id="cloudBtn" title="Moln‑synk (Firebase)">Moln</button>
     </div>
 
     <!-- TYDLIG VECKA/DATUM -->
@@ -119,8 +120,8 @@
       <p class="note">Tips: Den ursprungliga bokaren kan <em>Acceptera</em> eller <em>Neka</em> en tjänstförfrågan. Spelutmaningar avgörs direkt av minispel.</p>
     </div>
 
-    <p class="note">⚠️ Allt sparas endast i din webbläsare (localStorage). Ingen inloggning eller server. Om ni vill dela samma data: använd samma dator eller <strong>Exportera/Importera</strong> JSON.
-      <br>Enkel självhosting – lägg upp denna <span class="kbd">.html</span> på valfri webbplats.</p>
+    <p class="note">⚠️ Standard: Allt sparas lokalt i webbläsaren. Med Firebase‑konfiguration aktiverad synkas allt i molnet (multi‑user) i realtid utan server.
+      <br>Hosting: Lägg filen på valfri webbplats eller GitHub Pages.</p>
   </div>
 
   <!-- Boka / Redigera Modal -->
@@ -161,6 +162,23 @@
       <div class="row">
         <button class="btn warn" id="releaseConfirm">Släpp</button>
         <button class="btn" id="releaseCancel">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Moln‑synk Modal -->
+  <div class="modal-backdrop" id="cloudModal">
+    <div class="modal">
+      <h2>☁️ Moln‑synk (Firebase Firestore)</h2>
+      <div class="field">
+        <label>Klistra in din Firebase‑config (JSON)</label>
+        <textarea id="firebaseConfigText" rows="6" placeholder='{"apiKey":"…","authDomain":"…","projectId":"…"}'></textarea>
+      </div>
+      <p class="small">Tips: Config‑nycklar är offentliga. Begränsa åtkomst i Firestore‑regler.</p>
+      <div class="row">
+        <button class="btn primary" id="cloudSave">Spara och aktivera</button>
+        <button class="btn" id="cloudDisable">Avaktivera moln</button>
+        <button class="btn" id="cloudClose">Stäng</button>
       </div>
     </div>
   </div>
@@ -217,7 +235,31 @@
     function weekKey(d){ return `${getISOYear(d)}-V${String(getISOWeek(d)).padStart(2,'0')}`; }
 
     // --- Lagring ---
-    const DB = {
+    // För att aktivera moln‑synk (multi‑user) på GitHub Pages:
+    // 1) Skapa ett Firebase‑projekt och en Firestore‑databas (Native mode).
+    // 2) Tillåt (minst) läs/skriv i Rules för test, eller konfigurera Auth + striktare regler.
+    // 3) Lägg in din config här i sidan, t.ex. före denna script‑tagg:
+    //    <script id="firebase-config" type="application/json">{ "apiKey": "…", "authDomain": "…", "projectId": "…" }</script>
+    //    — alternativt sätt: window.FIREBASE_CONFIG = { apiKey:"…", authDomain:"…", projectId:"…" };
+    // 4) Publicera via GitHub Pages. Klienten använder bara offentliga nycklar; säkra med Firestore Rules.
+
+    function setStorageChip(mode){
+      const x = document.getElementById('storageChip');
+      if(!x) return;
+      if(mode==='cloud'){ x.textContent = '☁️ Moln (Firestore)'; x.title = 'Synkas i molnet – flera användare'; }
+      else { x.textContent = '💾 Lokalt'; x.title = 'Endast denna webbläsare'; }
+    }
+
+    function loadScript(src){
+      return new Promise((resolve, reject)=>{
+        const s = document.createElement('script'); s.src = src; s.defer = true;
+        s.onload = ()=>resolve(); s.onerror = ()=>reject(new Error('Script load fail: '+src));
+        document.head.appendChild(s);
+      });
+    }
+
+    const LocalDB = {
+      _mode:'local',
       load(){ return JSON.parse(localStorage.getItem('atelierBookings')||'{}'); },
       save(obj){ localStorage.setItem('atelierBookings', JSON.stringify(obj)); },
       challengesLoad(){ return JSON.parse(localStorage.getItem('atelierChallenges')||'{}'); },
@@ -226,7 +268,94 @@
       lbSave(obj){ localStorage.setItem('atelierLeaderboard', JSON.stringify(obj)); },
       namesLoad(){ return JSON.parse(localStorage.getItem('atelierNames')||'[]'); },
       namesSave(list){ localStorage.setItem('atelierNames', JSON.stringify(list)); },
-    }
+    };
+
+    const Cloud = (function(){
+      let fs = null;
+      const weekUnsubs = {};
+      const bookingsCache = {};   // key: wk -> slots[6]
+      const challengesCache = {}; // key: wk -> list[]
+      let leaderboardCache = {};
+      let lbUnsub = null;
+
+      function currentWeekKey(){ return weekKey(currentWeek); }
+
+      function ensureWeekSubscription(wk){
+        if(!fs || weekUnsubs[wk]) return;
+        // Bookings
+        weekUnsubs[wk] = fs.collection('bookings').doc(wk).onSnapshot(doc=>{
+          const slots = (doc.exists && Array.isArray((doc.data()||{}).slots)) ? doc.data().slots : Array.from({length:6},()=>null);
+          bookingsCache[wk] = slots;
+          if(currentWeekKey()===wk) render();
+        });
+        // Challenges (separat sub)
+        fs.collection('challenges').doc(wk).onSnapshot(doc=>{
+          const list = (doc.exists && Array.isArray((doc.data()||{}).list)) ? doc.data().list : [];
+          challengesCache[wk] = list;
+          if(currentWeekKey()===wk) renderPending();
+        });
+      }
+
+      function ensureLeaderboardSubscription(){
+        if(!fs || lbUnsub) return;
+        lbUnsub = fs.collection('meta').doc('leaderboard').onSnapshot(doc=>{
+          const d = doc.exists ? (doc.data()||{}) : {};
+          leaderboardCache = d.scores || {};
+          renderLeaderboard();
+        });
+      }
+
+      return {
+        _mode:'cloud',
+        async initIfConfigured(){
+          try{
+            let cfg = window.FIREBASE_CONFIG;
+            if(!cfg){ const t=document.getElementById('firebase-config'); if(t) cfg = JSON.parse(t.textContent||'{}'); }
+            if(!cfg || !cfg.projectId){ return false; }
+            await loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+            await loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js');
+            const app = firebase.initializeApp(cfg);
+            fs = firebase.firestore();
+            ensureLeaderboardSubscription();
+            setStorageChip('cloud');
+            return true;
+          }catch(err){ console.warn('Moln-init misslyckades', err); setStorageChip('local'); return false; }
+        },
+        load(){ const wk=currentWeekKey(); ensureWeekSubscription(wk); return { ...bookingsCache }; },
+        save(obj){ const wk=currentWeekKey(); const slots = obj[wk]||Array.from({length:6},()=>null); return fs.collection('bookings').doc(wk).set({slots},{merge:false}); },
+        challengesLoad(){ const wk=currentWeekKey(); ensureWeekSubscription(wk); return { [wk]: challengesCache[wk]||[] }; },
+        challengesSave(obj){ const wk=currentWeekKey(); const list=obj[wk]||[]; return fs.collection('challenges').doc(wk).set({list},{merge:false}); },
+        lbLoad(){ ensureLeaderboardSubscription(); return { ...leaderboardCache }; },
+        lbSave(map){ return fs.collection('meta').doc('leaderboard').set({scores: map},{merge:false}); },
+        namesLoad: LocalDB.namesLoad,
+        namesSave: LocalDB.namesSave,
+        // Import/export hjälp för alla veckor
+        _saveWeek(wk, slots){ return fs.collection('bookings').doc(wk).set({slots},{merge:false}); },
+        _saveChallengesWeek(wk, list){ return fs.collection('challenges').doc(wk).set({list},{merge:false}); },
+        async _exportAll(){
+          const [bks, chs, lbDoc] = await Promise.all([
+            fs.collection('bookings').get(),
+            fs.collection('challenges').get(),
+            fs.collection('meta').doc('leaderboard').get(),
+          ]);
+          const bookings = {}; bks.forEach(d=>{ bookings[d.id] = (d.data().slots||[]); });
+          const challenges = {}; chs.forEach(d=>{ challenges[d.id] = (d.data().list||[]); });
+          const leaderboard = lbDoc.exists ? (lbDoc.data().scores||{}) : {};
+          const names = LocalDB.namesLoad();
+          return { bookings, challenges, leaderboard, names, generatedAt: new Date().toISOString() };
+        }
+      };
+    })();
+
+    let DB = LocalDB;
+    setStorageChip('local');
+    // Ladda ev. sparad config från localStorage
+    (function(){
+      const savedCfgStr = localStorage.getItem('firebaseConfig');
+      if(savedCfgStr){ try{ window.FIREBASE_CONFIG = JSON.parse(savedCfgStr); } catch(_){} }
+    })();
+    // Initiera moln om konfig finns
+    Cloud.initIfConfigured().then(enabled=>{ if(enabled){ DB = Cloud; render(); } });
 
     // --- State ---
     let currentWeek = startOfISOWeek(new Date());
@@ -627,22 +756,64 @@
     $('#prevWeek').onclick = ()=>{ currentWeek = addDays(currentWeek,-7); render(); };
     $('#nextWeek').onclick = ()=>{ currentWeek = addDays(currentWeek, 7); render(); };
     $('#todayBtn').onclick = ()=>{ currentWeek = startOfISOWeek(new Date()); render(); };
+    // Moln-knapp
+    $('#cloudBtn').onclick = ()=>{
+      const t = document.getElementById('firebaseConfigText');
+      try{ t.value = JSON.stringify(window.FIREBASE_CONFIG||JSON.parse(localStorage.getItem('firebaseConfig')||'{}'), null, 2); }catch(_){ t.value=''; }
+      show('#cloudModal');
+    };
+    $('#cloudClose').onclick = ()=> hide('#cloudModal');
+    $('#cloudDisable').onclick = ()=>{
+      localStorage.removeItem('firebaseConfig');
+      window.FIREBASE_CONFIG = undefined;
+      DB = LocalDB; setStorageChip('local'); hide('#cloudModal'); render();
+    };
+    $('#cloudSave').onclick = async ()=>{
+      const txt = document.getElementById('firebaseConfigText').value.trim();
+      if(!txt){ toast('Klistra in en giltig Firebase‑config'); return; }
+      try{
+        const cfg = JSON.parse(txt);
+        localStorage.setItem('firebaseConfig', JSON.stringify(cfg));
+        window.FIREBASE_CONFIG = cfg;
+        const ok = await Cloud.initIfConfigured();
+        if(ok){ DB = Cloud; toast('Moln‑synk aktiverad'); hide('#cloudModal'); render(); }
+        else { toast('Kunde inte aktivera moln'); }
+      }catch(err){ alert('Ogiltig JSON'); }
+    };
 
     // Export / Import
-    $('#exportBtn').onclick = ()=>{
-      const data = { bookings: DB.load(), challenges: DB.challengesLoad(), leaderboard: DB.lbLoad(), names: DB.namesLoad(), generatedAt: new Date().toISOString() };
+    $('#exportBtn').onclick = async ()=>{
+      let data;
+      if(typeof DB._exportAll === 'function'){
+        try{ data = await DB._exportAll(); }
+        catch(err){ console.warn('Cloud export misslyckades, försöker lokalt', err); }
+      }
+      if(!data){
+        data = { bookings: DB.load(), challenges: DB.challengesLoad(), leaderboard: DB.lbLoad(), names: DB.namesLoad(), generatedAt: new Date().toISOString() };
+      }
       const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
       const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='lilla-ateljen-bokningar.json'; a.click(); URL.revokeObjectURL(a.href);
     };
     $('#importFile').addEventListener('change', e=>{
       const file = e.target.files[0]; if(!file) return;
-      const reader = new FileReader(); reader.onload = ()=>{
+      const reader = new FileReader(); reader.onload = async ()=>{
         try{
           const obj = JSON.parse(reader.result);
-          if(obj.bookings) localStorage.setItem('atelierBookings', JSON.stringify(obj.bookings));
-          if(obj.challenges) localStorage.setItem('atelierChallenges', JSON.stringify(obj.challenges));
-          if(obj.leaderboard) localStorage.setItem('atelierLeaderboard', JSON.stringify(obj.leaderboard));
-          if(obj.names) localStorage.setItem('atelierNames', JSON.stringify(obj.names));
+          if(typeof DB._saveWeek === 'function'){
+            // Cloud import
+            const tasks = [];
+            if(obj.bookings){ for(const [wk, slots] of Object.entries(obj.bookings)){ tasks.push(DB._saveWeek(wk, slots)); } }
+            if(obj.challenges){ for(const [wk, list] of Object.entries(obj.challenges)){ tasks.push(DB._saveChallengesWeek(wk, list)); } }
+            if(obj.leaderboard){ tasks.push(DB.lbSave(obj.leaderboard)); }
+            if(obj.names){ LocalDB.namesSave(obj.names); }
+            await Promise.all(tasks);
+          } else {
+            // Local import
+            if(obj.bookings) localStorage.setItem('atelierBookings', JSON.stringify(obj.bookings));
+            if(obj.challenges) localStorage.setItem('atelierChallenges', JSON.stringify(obj.challenges));
+            if(obj.leaderboard) localStorage.setItem('atelierLeaderboard', JSON.stringify(obj.leaderboard));
+            if(obj.names) localStorage.setItem('atelierNames', JSON.stringify(obj.names));
+          }
           toast('Importerad!'); render();
         }catch(err){ alert('Ogiltig JSON'); }
       }; reader.readAsText(file);
