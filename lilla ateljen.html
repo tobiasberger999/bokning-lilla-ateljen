@@ -96,9 +96,7 @@
       <button class="btn ghost" id="todayBtn">Denna vecka</button>
       <div class="kbd" id="rangeLabel">Mån … – Sön …</div>
       <span class="chip" id="storageChip" title="Lagringsläge">💾 Lokalt</span>
-      <button class="btn" id="exportBtn" title="Exportera data">Exportera</button>
-      <label class="btn" for="importFile" title="Importera data">Importera<input id="importFile" type="file" accept="application/json" style="display:none"></label>
-      <button class="btn" id="cloudBtn" title="Moln‑synk (Firebase)">Moln</button>
+      
     </div>
 
     <!-- TYDLIG VECKA/DATUM -->
@@ -120,8 +118,9 @@
       <p class="note">Tips: Den ursprungliga bokaren kan <em>Acceptera</em> eller <em>Neka</em> en tjänstförfrågan. Spelutmaningar avgörs direkt av minispel.</p>
     </div>
 
-    <p class="note">⚠️ Standard: Allt sparas lokalt i webbläsaren. Med Firebase‑konfiguration aktiverad synkas allt i molnet (multi‑user) i realtid utan server.
-      <br>Hosting: Lägg filen på valfri webbplats eller GitHub Pages.</p>
+    <p class="note">Så funkar det: Klicka på <em>Boka denna plats</em> för att boka en av veckans 6 platser. 
+      Om minispel/tjänst är tillåtet kan andra utmana din bokning. 
+      Data synkas i realtid mellan alla som använder sidan.</p>
   </div>
 
   <!-- Boka / Redigera Modal -->
@@ -166,22 +165,7 @@
     </div>
   </div>
 
-  <!-- Moln‑synk Modal -->
-  <div class="modal-backdrop" id="cloudModal">
-    <div class="modal">
-      <h2>☁️ Moln‑synk (Firebase Firestore)</h2>
-      <div class="field">
-        <label>Klistra in din Firebase‑config (JSON)</label>
-        <textarea id="firebaseConfigText" rows="6" placeholder='{"apiKey":"…","authDomain":"…","projectId":"…"}'></textarea>
-      </div>
-      <p class="small">Tips: Config‑nycklar är offentliga. Begränsa åtkomst i Firestore‑regler.</p>
-      <div class="row">
-        <button class="btn primary" id="cloudSave">Spara och aktivera</button>
-        <button class="btn" id="cloudDisable">Avaktivera moln</button>
-        <button class="btn" id="cloudClose">Stäng</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- Mini‑spel Modal (Reaktion) -->
   <div class="modal-backdrop" id="gameModalReaction">
@@ -450,7 +434,7 @@
         row.innerHTML = `
           <div class="small">
             <strong>Plats ${c.spot+1}</strong> – utmanare <strong>${escapeHtml(c.from)}</strong>
-            ${c.type==='favor'? 'ber om en tjänst:': 'lämnade ett meddelande:'}
+            ${c.type==='favor'? 'erbjuder en tjänst:': 'lämnade ett meddelande:'}
             <em>“${escapeHtml(c.text||'') }”</em> (till <strong>${escapeHtml(c.to)}</strong>)
           </div>`;
         const actions = el('div','foot');
@@ -768,68 +752,9 @@
     $('#prevWeek').onclick = ()=>{ currentWeek = addDays(currentWeek,-7); render(); };
     $('#nextWeek').onclick = ()=>{ currentWeek = addDays(currentWeek, 7); render(); };
     $('#todayBtn').onclick = ()=>{ currentWeek = startOfISOWeek(new Date()); render(); };
-    // Moln-knapp
-    $('#cloudBtn').onclick = ()=>{
-      const t = document.getElementById('firebaseConfigText');
-      try{ t.value = JSON.stringify(window.FIREBASE_CONFIG||JSON.parse(localStorage.getItem('firebaseConfig')||'{}'), null, 2); }catch(_){ t.value=''; }
-      show('#cloudModal');
-    };
-    $('#cloudClose').onclick = ()=> hide('#cloudModal');
-    $('#cloudDisable').onclick = ()=>{
-      localStorage.removeItem('firebaseConfig');
-      window.FIREBASE_CONFIG = undefined;
-      DB = LocalDB; setStorageChip('local'); hide('#cloudModal'); render();
-    };
-    $('#cloudSave').onclick = async ()=>{
-      const txt = document.getElementById('firebaseConfigText').value.trim();
-      if(!txt){ toast('Klistra in en giltig Firebase‑config'); return; }
-      try{
-        const cfg = JSON.parse(txt);
-        localStorage.setItem('firebaseConfig', JSON.stringify(cfg));
-        window.FIREBASE_CONFIG = cfg;
-        const ok = await Cloud.initIfConfigured();
-        if(ok){ DB = Cloud; toast('Moln‑synk aktiverad'); hide('#cloudModal'); render(); }
-        else { toast('Kunde inte aktivera moln'); }
-      }catch(err){ alert('Ogiltig JSON'); }
-    };
+    // Moln-konfiguration via inbäddad script‑tagg används automatiskt; ingen manuell dialog längre.
 
-    // Export / Import
-    $('#exportBtn').onclick = async ()=>{
-      let data;
-      if(typeof DB._exportAll === 'function'){
-        try{ data = await DB._exportAll(); }
-        catch(err){ console.warn('Cloud export misslyckades, försöker lokalt', err); }
-      }
-      if(!data){
-        data = { bookings: DB.load(), challenges: DB.challengesLoad(), leaderboard: DB.lbLoad(), names: DB.namesLoad(), generatedAt: new Date().toISOString() };
-      }
-      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='lilla-ateljen-bokningar.json'; a.click(); URL.revokeObjectURL(a.href);
-    };
-    $('#importFile').addEventListener('change', e=>{
-      const file = e.target.files[0]; if(!file) return;
-      const reader = new FileReader(); reader.onload = async ()=>{
-        try{
-          const obj = JSON.parse(reader.result);
-          if(typeof DB._saveWeek === 'function'){
-            // Cloud import
-            const tasks = [];
-            if(obj.bookings){ for(const [wk, slots] of Object.entries(obj.bookings)){ tasks.push(DB._saveWeek(wk, slots)); } }
-            if(obj.challenges){ for(const [wk, list] of Object.entries(obj.challenges)){ tasks.push(DB._saveChallengesWeek(wk, list)); } }
-            if(obj.leaderboard){ tasks.push(DB.lbSave(obj.leaderboard)); }
-            if(obj.names){ LocalDB.namesSave(obj.names); }
-            await Promise.all(tasks);
-          } else {
-            // Local import
-            if(obj.bookings) localStorage.setItem('atelierBookings', JSON.stringify(obj.bookings));
-            if(obj.challenges) localStorage.setItem('atelierChallenges', JSON.stringify(obj.challenges));
-            if(obj.leaderboard) localStorage.setItem('atelierLeaderboard', JSON.stringify(obj.leaderboard));
-            if(obj.names) localStorage.setItem('atelierNames', JSON.stringify(obj.names));
-          }
-          toast('Importerad!'); render();
-        }catch(err){ alert('Ogiltig JSON'); }
-      }; reader.readAsText(file);
-    });
+    // Export/Import borttaget enligt önskemål
 
     // Init
     render();
