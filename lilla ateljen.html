@@ -259,13 +259,22 @@
       return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
     }
 
+    function normalizeGateCode(input){
+      return String(input||'')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g,''); // remove diacritics (e.g., é -> e)
+    }
+
     async function getGateCodeHash(){
-      let h = localStorage.getItem('gateCodeHash');
+      let h = localStorage.getItem('gateCodeHashV2');
       if(h) return h;
-      const code = prompt('Ange gemensam kod för att skriva ändringar:');
+      const code = prompt('Ange gemensam kod (skiftläges- och accentokänslig):');
       if(!code) throw new Error('Ingen kod angiven');
-      h = await sha256Hex(code);
-      localStorage.setItem('gateCodeHash', h);
+      const normalized = normalizeGateCode(code);
+      h = await sha256Hex(normalized);
+      localStorage.setItem('gateCodeHashV2', h);
       return h;
     }
 
