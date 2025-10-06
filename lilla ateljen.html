@@ -163,7 +163,21 @@
     </div>
   </div>
 
-  
+  <!-- Kod-inloggning (blockerar tills korrekt kod anges) -->
+  <div class="modal-backdrop" id="gateModal">
+    <div class="modal">
+      <h2>🔒 Ange kod</h2>
+      <div class="field">
+        <label for="gateCode">Skriv in koden för att komma till bokningen</label>
+        <input id="gateCode" type="password" placeholder="Kod" autocomplete="one-time-code" />
+      </div>
+      <div id="gateError" class="small" style="color:#b71c1c; display:none">Nej, det var fel kod. Fråga en kollega eller prova igen.</div>
+      <div class="row">
+        <button class="btn primary" id="gateSubmit">Fortsätt</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Mini‑spel Modal (Reaktion) -->
   <div class="modal-backdrop" id="gameModalReaction">
@@ -341,15 +355,9 @@
             return true;
           }catch(err){ console.warn('Moln-init misslyckades', err); setStorageChip('local'); return false; }
         },
-        async verifyCode(){
-          try{
-            const _codeHash = await getGateCodeHash();
-            await fs.collection('meta').doc('ping').set({ ts: Date.now(), _codeHash }, { merge: true });
-            return true;
-          }catch(err){
-            try{ localStorage.removeItem('gateCodeHashV2'); }catch(_){ }
-            return false;
-          }
+        async tryHash(hash){
+          try{ await fs.collection('meta').doc('gate_check').set({ ts: Date.now(), _codeHash: hash }, { merge: false }); return true; }
+          catch(_){ return false; }
         },
         async validateGate(){
           for(;;){
