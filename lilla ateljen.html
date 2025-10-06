@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lilla ateljén – Veckobokning (6 platser)</title>
+  <style>
+    /* KAU-färger */
+    :root{
+      --kau-yellow:#F7D117;
+      --kau-red:#7D212B;
+      --black:#212121;
+      --white:#ffffff;
+      --muted:#6b6b6b;
+      --bg:#ffffff;
+      --card:#f7f7f7;
+      --text:#212121;
+      --accent:#F7D117;
+      --ok:#2e7d32;
+      --danger:#b71c1c;
+      --border:#e4e4e4;
+    }
+    html,body{height:100%}
+    body{margin:0;font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;background:var(--bg);color:var(--text)}
+    .container{max-width:1100px;margin:0 auto;padding:24px}
+    h1{margin:0 0 12px;font-size:clamp(22px,3vw,34px);letter-spacing:.2px}
+    .subtitle{color:#444;margin:0 0 16px}
+
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 16px}
+    .week-nav{display:flex;align-items:center;gap:8px;background:var(--white);padding:8px 10px;border-radius:12px;border:1px solid var(--border)}
+    .btn{border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--white);color:var(--text);transition:.12s}
+    .btn:hover{transform:translateY(-1px)}
+    .btn.primary{background:var(--accent);border-color:#e0c100;color:#000;font-weight:600}
+    .btn.warn{background:#ffe5e5;border-color:#f5bcbc;color:#5a0000}
+    .btn.ghost{background:transparent;border:1px dashed #cfcfcf}
+    .kbd{background:#f2f2f2;padding:6px 8px;border-radius:8px;border:1px solid var(--border);font-weight:600}
+
+    .hero-week{display:grid;grid-template-columns:1fr;gap:6px;background:#fff7cc;border:1px solid #f0dc6a;padding:14px;border-radius:14px;margin:0 0 16px}
+    .hero-week .wk{font-size:clamp(22px,4vw,36px);font-weight:800;line-height:1}
+    .hero-week .rng{font-size:clamp(14px,2.3vw,18px);opacity:.9}
+
+    .chip{background:#f6f1d0;border:1px solid #ead76a;color:#4a3b00;padding:4px 8px;border-radius:999px;font-size:12px}
+
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    @media (max-width:800px){.grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:520px){.grid{grid-template-columns:1fr}}
+
+    .card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:14px 14px 12px;position:relative;box-shadow:0 4px 12px rgba(0,0,0,.05)}
+    .card h3{margin:0 0 6px;font-size:18px}
+    .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:999px;background:#f0f0f0;color:#333;border:1px solid var(--border)}
+    .taken{outline:2px solid transparent}
+    .free{outline:2px dashed #e3e3e3}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;margin-right:6px;background:#eee;color:#333;border:1px solid #ddd}
+    .pill.allow{background:#e8f5e9;border-color:#c8e6c9;color:#1b5e20}
+
+    .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .row.space{justify-content:space-between}
+    .muted{color:var(--muted)}
+    .label{font-size:12px;color:#444}
+    .small{font-size:12px}
+    .foot{display:flex;gap:8px;margin-top:10px}
+
+    .panel{margin-top:18px;background:#fff;border:1px solid var(--border);padding:12px;border-radius:12px}
+    .panel h4{margin:0 0 8px}
+    .leader{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+
+    .note{font-size:12px;color:#555}
+    .link{color:var(--kau-red);text-decoration:none}
+
+    /* Modaler */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:30}
+    .modal{width:min(740px,92vw);background:#fff;border:1px solid var(--border);border-radius:18px;padding:16px 16px 14px;box-shadow:0 30px 80px rgba(0,0,0,.15)}
+    .modal h2{margin:0 0 10px;font-size:20px}
+    .field{margin:10px 0}
+    .field label{display:block;font-size:13px;margin-bottom:6px;color:#333}
+    .field input[type=text], .field textarea, .field select{width:100%;box-sizing:border-box;background:#fff;border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:10px}
+    .switch{display:inline-flex;align-items:center;gap:8px;margin-right:12px}
+    .switch input{accent-color:#F7D117}
+
+    .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#212121;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.2);display:none;z-index:50}
+
+    canvas{display:block;margin:8px 0;border:1px solid var(--border);border-radius:12px;background:#f7f7f7}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>💻 Lilla ateljén – bokning per vecka</h1>
+    <p class="subtitle">6 platser · 1 vecka åt gången · vissa rolighetsinslag finns 😇</p>
+
+    <div class="toolbar">
+      <div class="week-nav">
+        <button class="btn" id="prevWeek" title="Föregående vecka">◀</button>
+        <div id="weekLabel" class="kbd">Vecka …</div>
+        <button class="btn" id="nextWeek" title="Nästa vecka">▶</button>
+      </div>
+      <button class="btn ghost" id="todayBtn">Denna vecka</button>
+      <div class="kbd" id="rangeLabel">Mån … – Sön …</div>
+      <span class="chip" title="Sparas bara lokalt">💾 Lokalt (denna webbläsare)</span>
+      <button class="btn" id="exportBtn" title="Exportera data">Exportera</button>
+      <label class="btn" for="importFile" title="Importera data">Importera<input id="importFile" type="file" accept="application/json" style="display:none"></label>
+    </div>
+
+    <!-- TYDLIG VECKA/DATUM -->
+    <div class="hero-week">
+      <div class="wk" id="weekLabelBig">Vecka …</div>
+      <div class="rng" id="rangeLabelBig">…</div>
+    </div>
+
+    <div class="grid" id="spots"></div>
+
+    <div class="panel">
+      <h4>🏆 Topplista (spel‑övertaganden)</h4>
+      <div id="leaderboard" class="leader small"></div>
+    </div>
+
+    <div class="panel">
+      <h4>📨 Väntande tjänster/utmaningar (denna vecka)</h4>
+      <div id="pendingList" class="small"></div>
+      <p class="note">Tips: Den ursprungliga bokaren kan <em>Acceptera</em> eller <em>Neka</em> en tjänstförfrågan. Spelutmaningar avgörs direkt av minispel.</p>
+    </div>
+
+    <p class="note">⚠️ Allt sparas endast i din webbläsare (localStorage). Ingen inloggning eller server. Om ni vill dela samma data: använd samma dator eller <strong>Exportera/Importera</strong> JSON.
+      <br>Enkel självhosting – lägg upp denna <span class="kbd">.html</span> på valfri webbplats.</p>
+  </div>
+
+  <!-- Boka / Redigera Modal -->
+  <div class="modal-backdrop" id="bookModal">
+    <div class="modal">
+      <h2 id="bookTitle">Boka plats</h2>
+      <div class="field"><label for="yourName">Ditt namn</label><input id="yourName" type="text" placeholder="t.ex. Tobias Berger" /></div>
+      <div class="field"><label for="note">Anteckning (valfritt)</label><input id="note" type="text" placeholder="t.ex. Behöver tyst för skrivande" /></div>
+      <div class="field"><label>Tillåt andra att utmana denna bokning med…</label>
+        <label class="switch"><input type="checkbox" id="allowGame" checked> <span>🎮 minispel</span></label>
+        <label class="switch"><input type="checkbox" id="allowFavor"> <span>🤝 tjänst</span></label>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="bookSave">Spara</button>
+        <button class="btn" id="bookCancel">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Utmana Modal -->
+  <div class="modal-backdrop" id="challengeModal">
+    <div class="modal">
+      <h2>Utmana nuvarande bokning</h2>
+      <div class="field"><label for="challengerName">Ditt namn</label><input id="challengerName" type="text" placeholder="t.ex. Stefan" /></div>
+      <div id="challengeOptions"></div>
+      <div class="row">
+        <button class="btn" id="challengeClose">Stäng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Släpp plats Modal -->
+  <div class="modal-backdrop" id="releaseModal">
+    <div class="modal">
+      <h2>Släpp plats</h2>
+      <p class="small">Ärlighetsprincipen: bara den som bokat bör släppa.</p>
+      <div class="field"><label for="releaseName">Skriv namnet som står på bokningen för att bekräfta</label><input id="releaseName" type="text" placeholder="Ditt namn" /></div>
+      <div class="row">
+        <button class="btn warn" id="releaseConfirm">Släpp</button>
+        <button class="btn" id="releaseCancel">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mini‑spel Modal (Reaktion) -->
+  <div class="modal-backdrop" id="gameModalReaction">
+    <div class="modal">
+      <h2>🎯 Reaktionsduell</h2>
+      <p class="small">Vänta tills rutan säger <strong>NU!</strong> och klicka så snabbt du kan. Klå <span id="targetMs">500</span> ms för att ta platsen.</p>
+      <div id="gameArea" style="height:160px;border-radius:12px;background:#f0f0f0;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:28px;user-select:none;cursor:pointer">Är du beredd?</div>
+      <div class="row">
+        <button class="btn" id="gameCancel">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mini-spel Modal (Breakout) -->
+  <div class="modal-backdrop" id="gameModalBreakout">
+    <div class="modal">
+      <h2>🧱 Breakout mini</h2>
+      <p class="small">Rör paddeln med musen. Slå sönder alla tegel inom <strong>40 s</strong> för att vinna.</p>
+      <canvas id="breakout" width="560" height="320"></canvas>
+      <div class="row">
+        <button class="btn" id="breakoutCancel">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mini-spel Modal (Måltavlor) -->
+  <div class="modal-backdrop" id="gameModalTargets">
+    <div class="modal">
+      <h2>🎯 Måltavlor</h2>
+      <p class="small">Klicka 5 mål på <strong>8 s</strong> för att vinna.</p>
+      <canvas id="targets" width="560" height="280"></canvas>
+      <div class="row">
+        <button class="btn" id="targetsCancel">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // --- Hjälpfunktioner ---
+    const $ = sel => document.querySelector(sel);
+    const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; };
+    const fmtDate = d=>d.toLocaleDateString('sv-SE',{month:'short',day:'numeric'});
+
+    // ISO-veckor
+    function startOfISOWeek(dt){ const d=new Date(dt); const day=(d.getDay()||7); d.setHours(0,0,0,0); if(day!==1) d.setDate(d.getDate()-day+1); return d; }
+    function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+    function getISOWeek(d){ const date=new Date(d); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-((date.getDay()+6)%7)); const week1=new Date(date.getFullYear(),0,4); return 1 + Math.round(((date.getTime()-week1.getTime())/86400000 - 3 + ((week1.getDay()+6)%7))/7); }
+    function getISOYear(d){ const date=new Date(d); date.setDate(date.getDate()+3-((date.getDay()+6)%7)); return date.getFullYear(); }
+    function weekKey(d){ return `${getISOYear(d)}-V${String(getISOWeek(d)).padStart(2,'0')}`; }
+
+    // --- Lagring ---
+    const DB = {
+      load(){ return JSON.parse(localStorage.getItem('atelierBookings')||'{}'); },
+      save(obj){ localStorage.setItem('atelierBookings', JSON.stringify(obj)); },
+      challengesLoad(){ return JSON.parse(localStorage.getItem('atelierChallenges')||'{}'); },
+      challengesSave(obj){ localStorage.setItem('atelierChallenges', JSON.stringify(obj)); },
+      lbLoad(){ return JSON.parse(localStorage.getItem('atelierLeaderboard')||'{}'); },
+      lbSave(obj){ localStorage.setItem('atelierLeaderboard', JSON.stringify(obj)); },
+      namesLoad(){ return JSON.parse(localStorage.getItem('atelierNames')||'[]'); },
+      namesSave(list){ localStorage.setItem('atelierNames', JSON.stringify(list)); },
+    }
+
+    // --- State ---
+    let currentWeek = startOfISOWeek(new Date());
+    let editingSpotIndex = null; // 0..5
+    let challengingSpotIndex = null;
+    let releaseCtx = {spotIndex:null, expectedName:''};
+    let gameCtx = {arm:false, started:false, target:500, timeout: null, fail:false};
+
+    // --- Render ---
+    function render(){
+      const wkKey = weekKey(currentWeek);
+      const db = DB.load();
+      const week = db[wkKey] || Array.from({length:6},()=>null);
+
+      const mon = new Date(currentWeek);
+      const sun = addDays(mon,6);
+      const wkNum = wkKey.split('-')[1];
+      $('#weekLabel').textContent = `${wkKey}`;
+      $('#rangeLabel').textContent = `${fmtDate(mon)} – ${fmtDate(sun)}`;
+      $('#weekLabelBig').textContent = `Vecka ${wkNum.replace('V','')}, ${getISOYear(mon)}`;
+      $('#rangeLabelBig').textContent = `${fmtDate(mon)} – ${fmtDate(sun)}`;
+
+      const grid = $('#spots'); grid.innerHTML='';
+      week.forEach((slot, i)=>{
+        const card = el('div','card '+(slot? 'taken':'free'));
+        const head = el('div','row space');
+        head.appendChild(el('h3',null,`Plats ${i+1}`));
+        head.appendChild(el('span','badge', slot? 'Bokad':'Ledig'));
+        card.appendChild(head);
+
+        if(slot){
+          const by = el('div','row');
+          by.appendChild(el('div','label',`av <strong>${escapeHtml(slot.name)}</strong>`));
+          if(slot.note){ by.appendChild(el('span','pill',`📝 ${escapeHtml(slot.note)}`)); }
+          card.appendChild(by);
+
+          const parts = [];
+          if(slot.allowGame) parts.push('<span class="pill allow">🎮 minispel</span>');
+          if(slot.allowFavor) parts.push('<span class="pill allow">🤝 tjänst</span>');
+          if(parts.length){
+            const opt = el('div','row small', parts.join(' '));
+            card.appendChild(opt);
+          }
+
+          const foot = el('div','foot');
+          if (slot.allowGame || slot.allowFavor) {
+            const challengeBtn = el('button','btn', 'Utmana');
+            challengeBtn.onclick = ()=>openChallenge(i, slot);
+            foot.appendChild(challengeBtn);
+          }
+          const releaseBtn = el('button','btn warn','Släpp');
+          releaseBtn.title = 'Bara samma namn bör släppa (ärlighetsprincipen)';
+          releaseBtn.onclick = ()=>openRelease(i, slot);
+          foot.appendChild(releaseBtn);
+          card.appendChild(foot);
+        } else {
+          const foot = el('div','foot');
+          const bookBtn = el('button','btn primary','Boka denna plats');
+          bookBtn.onclick = ()=>openBook(i);
+          const info = el('div','note','En person per plats hela veckan.');
+          card.appendChild(info);
+          foot.append(bookBtn);
+          card.appendChild(foot);
+        }
+        grid.appendChild(card);
+      });
+
+      renderPending();
+      renderLeaderboard();
+    }
+
+    function renderPending(){
+      const wkKey = weekKey(currentWeek);
+      const list = DB.challengesLoad()[wkKey]||[];
+      const box = $('#pendingList');
+      if(!list.length){ box.innerHTML = '<span class="muted">Inget väntande.</span>'; return; }
+      box.innerHTML='';
+      list.forEach((c, idx)=>{
+        const row = el('div','panel');
+        row.innerHTML = `
+          <div class="small">
+            <strong>Plats ${c.spot+1}</strong> – utmanare <strong>${escapeHtml(c.from)}</strong>
+            ${c.type==='favor'? 'ber om en tjänst:': 'lämnade ett meddelande:'}
+            <em>“${escapeHtml(c.text||'') }”</em> (till <strong>${escapeHtml(c.to)}</strong>)
+          </div>`;
+        const actions = el('div','foot');
+        const accept = el('button','btn primary','Acceptera (ge platsen)');
+        const deny = el('button','btn','Neka');
+        accept.onclick = ()=>{ grantFavor(idx); };
+        deny.onclick = ()=>{ denyFavor(idx); };
+        actions.append(accept, deny);
+        row.appendChild(actions);
+        box.appendChild(row);
+      })
+    }
+
+    function renderLeaderboard(){
+      const lb = DB.lbLoad();
+      const entries = Object.entries(lb).sort((a,b)=>b[1]-a[1]);
+      const host = $('#leaderboard'); host.innerHTML='';
+      if(!entries.length){ host.innerHTML='<span class="muted">Inga vinster ännu. Var först!</span>'; return; }
+      entries.forEach(([name,score])=>{
+        const a = el('div','chip',escapeHtml(name));
+        const b = el('div','chip',`🏅 ${score}`);
+        host.append(a,b);
+      })
+    }
+
+    // --- Boka ---
+    function openBook(i){
+      editingSpotIndex = i;
+      $('#bookTitle').textContent = `Boka plats ${i+1} för ${weekKey(currentWeek)}`;
+      const defaultName = (DB.namesLoad()[0]||'');
+      $('#yourName').value = defaultName;
+      $('#note').value = '';
+      $('#allowGame').checked = true;
+      $('#allowFavor').checked = false;
+      show('#bookModal');
+      $('#yourName').focus();
+    }
+    $('#bookCancel').onclick = ()=>hide('#bookModal');
+    $('#bookSave').onclick = ()=>{
+      const name = $('#yourName').value.trim();
+      if(!name){ toast('Fyll i ditt namn'); return; }
+      const entry = { name, note: $('#note').value.trim(), allowGame: $('#allowGame').checked, allowFavor: $('#allowFavor').checked, ts: Date.now() };
+      const db = DB.load(); const wk = weekKey(currentWeek);
+      db[wk] = db[wk] || Array.from({length:6},()=>null);
+      db[wk][editingSpotIndex] = entry;
+      DB.save(db);
+      rememberName(name);
+      hide('#bookModal');
+      render();
+      toast(`Bokade plats ${editingSpotIndex+1} för ${wk}`);
+    };
+
+    // --- Släpp plats ---
+    function openRelease(i, slot){
+      releaseCtx.spotIndex = i;
+      releaseCtx.expectedName = slot.name;
+      $('#releaseName').value = '';
+      show('#releaseModal');
+      $('#releaseName').focus();
+    }
+    $('#releaseCancel').onclick = ()=>hide('#releaseModal');
+    $('#releaseConfirm').onclick = ()=>{
+      const who = $('#releaseName').value.trim();
+      if(!who){ toast('Skriv namnet som står på bokningen'); return; }
+      if(who.toLowerCase() !== releaseCtx.expectedName.trim().toLowerCase()){
+        toast('Namnet matchade inte. Avbrutet.'); return; }
+      const db = DB.load(); const wk = weekKey(currentWeek);
+      db[wk][releaseCtx.spotIndex] = null; DB.save(db);
+      hide('#releaseModal');
+      toast(`Plats ${releaseCtx.spotIndex+1} släppt.`); render();
+    };
+
+    // --- Utmana ---
+    function openChallenge(i, slot){
+      challengingSpotIndex = i;
+      $('#challengerName').value = (DB.namesLoad()[0]||'');
+      const box = $('#challengeOptions');
+      box.innerHTML = '';
+      const info = el('div','note',`Bokad av <strong>${escapeHtml(slot.name)}</strong>.`);
+      box.appendChild(info);
+
+      if(slot.allowGame){
+        const gameWrap = el('div','field');
+        gameWrap.innerHTML = `<label>Välj minispel:</label>`;
+        const gRow = el('div','row');
+        const b1 = el('button','btn primary','🎯 Reaktion'); b1.onclick = ()=>startGameReaction(slot);
+        const b2 = el('button','btn','🧱 Breakout'); b2.onclick = ()=>startGameBreakout(slot);
+        const b3 = el('button','btn','🎯 Måltavlor'); b3.onclick = ()=>startGameTargets(slot);
+        gRow.append(b1,b2,b3); gameWrap.appendChild(gRow); box.appendChild(gameWrap);
+      } else {
+        box.appendChild(el('div','note','Spelutmaningar är avstängda.'));
+      }
+
+      if(slot.allowFavor){
+        const area = el('div','field');
+        area.innerHTML = '<label>Föreslå en tjänst (måste accepteras av bokaren):</label><textarea id="favorText" rows="3" placeholder="t.ex. Jag tar din fredagslunchrond"></textarea>';
+        box.appendChild(area);
+        const send = el('button','btn','Skicka tjänstförfrågan');
+        send.onclick = ()=>sendFavor(slot.name);
+        box.appendChild(send);
+      }
+
+      show('#challengeModal');
+      $('#challengerName').focus();
+    }
+    $('#challengeClose').onclick = ()=>hide('#challengeModal');
+
+    function sendFavor(toName){
+      const from = $('#challengerName').value.trim();
+      if(!from){ toast('Fyll i ditt namn först'); return; }
+      const text = (document.getElementById('favorText')||{value:''}).value.trim();
+      const wk = weekKey(currentWeek);
+      const all = DB.challengesLoad(); all[wk] = all[wk]||[];
+      all[wk].push({ type:'favor', from, to: toName, text, spot: challengingSpotIndex, ts: Date.now() });
+      DB.challengesSave(all);
+      rememberName(from);
+      toast('Tjänstförfrågan skickad');
+      hide('#challengeModal'); render();
+    }
+
+    function grantFavor(idx){
+      const wk = weekKey(currentWeek);
+      const all = DB.challengesLoad(); const row = all[wk][idx];
+      const db = DB.load(); db[wk] = db[wk]||Array.from({length:6},()=>null);
+      db[wk][row.spot] = { name: row.from, note:`(vann via tjänst från ${row.to})`, allowGame:true, allowFavor:true, ts: Date.now() };
+      DB.save(db);
+      all[wk].splice(idx,1); DB.challengesSave(all);
+      toast(`Tjänst accepterad – ${row.from} har nu plats ${row.spot+1}`);
+      render();
+    }
+    function denyFavor(idx){
+      const wk = weekKey(currentWeek);
+      const all = DB.challengesLoad(); all[wk].splice(idx,1); DB.challengesSave(all);
+      toast('Tjänst nekad'); render();
+    }
+
+    // --- Mini‑spel: Reaktion ---
+    function startGameReaction(slot){
+      const challenger = $('#challengerName').value.trim();
+      if(!challenger){ toast('Skriv ditt namn'); return; }
+      hide('#challengeModal');
+      gameCtx.target = 500; // ms
+      $('#targetMs').textContent = gameCtx.target;
+      show('#gameModalReaction');
+      const area = $('#gameArea');
+      gameCtx.started=false; gameCtx.arm=false; gameCtx.fail=false;
+      area.textContent='Är du beredd?';
+      area.onclick = ()=>{
+        if(!gameCtx.started){ gameCtx.fail=true; finishGame(false, challenger, slot); }
+        else if(gameCtx.arm){ const rt = Date.now()-gameCtx.startTime; finishGame(rt <= gameCtx.target, challenger, slot, rt); }
+      };
+      clearTimeout(gameCtx.timeout);
+      gameCtx.timeout = setTimeout(()=>{
+        gameCtx.started=true; gameCtx.arm=true; gameCtx.startTime=Date.now();
+        area.textContent='NU!';
+      }, 800 + Math.random()*1500);
+      $('#gameCancel').onclick = ()=>{ hide('#gameModalReaction'); };
+    }
+
+    function finishGame(won, challenger, slot, rt){
+      clearTimeout(gameCtx.timeout);
+      const area = $('#gameArea');
+      if(!won){
+        if(!gameCtx.started || gameCtx.fail){ area.textContent='För tidigt! Du klickade innan NU!'; }
+        else area.textContent=`För långsamt (${rt|0} ms). Du behöver ≤ ${gameCtx.target} ms.`;
+        setTimeout(()=>{ hide('#gameModalReaction'); }, 2000);
+        toast('Utmanning misslyckades – ingen förändring');
+        return;
+      }
+      area.textContent=`Du vann! (${rt|0} ms)`;
+      setTimeout(()=>{ hide('#gameModalReaction'); }, 2000);
+
+      transferSpot(challenger, slot, `(vann minispel: reaktion mot ${slot.name})`);
+    }
+
+    // --- Mini-spel: Breakout ---
+    function startGameBreakout(slot){
+      const challenger = $('#challengerName').value.trim();
+      if(!challenger){ toast('Skriv ditt namn'); return; }
+      hide('#challengeModal');
+      show('#gameModalBreakout');
+      const cvs = $('#breakout');
+      const ctx = cvs.getContext('2d');
+      const W=cvs.width, H=cvs.height;
+      let paddle = {w:80,h:12,x:W/2-40,y:H-24};
+      let ball = {x:W/2,y:H/2,vx:3,vy:-3,r:7};
+      const rows=3, cols=6, bw=80, bh=20, pad=10, offx=(W - (cols*bw + (cols-1)*pad))/2, offy=40;
+      let bricks = [];
+      for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) bricks.push({x:offx+c*(bw+pad),y:offy+r*(bh+pad),w:bw,h:bh,alive:true});
+      let running=false, destroyed=0; let timeLeft=40; let timer;
+
+      function draw(){
+        ctx.clearRect(0,0,W,H);
+        ctx.fillStyle='#333'; ctx.font='14px system-ui'; ctx.fillText(`Tid: ${timeLeft}s  ·  Kvar: ${bricks.length-destroyed}`,10,18);
+        ctx.fillStyle='#212121'; ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
+        ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2); ctx.fillStyle='#7D212B'; ctx.fill();
+        ctx.fillStyle='#F7D117'; bricks.forEach(b=>{ if(b.alive) ctx.fillRect(b.x,b.y,b.w,b.h); });
+      }
+      function step(){
+        if(!running) return;
+        // Rörelse och väggar
+        if(ball.x+ball.vx<ball.r || ball.x+ball.vx>W-ball.r) ball.vx*=-1;
+        if(ball.y+ball.vy<ball.r) ball.vy*=-1;
+        if(ball.y+ball.vy>H+20){ end(false); return; }
+        // Paddel
+        if(ball.y+ball.r>=paddle.y && ball.x>paddle.x && ball.x<paddle.x+paddle.w && ball.vy>0){
+          ball.vy*=-1; const hit=(ball.x-(paddle.x+paddle.w/2))/(paddle.w/2); ball.vx=hit*4;
+        }
+        // Nästa position
+        let nx=ball.x+ball.vx, ny=ball.y+ball.vy;
+        // Tegel-kollision (svept AABB)
+        let hit=null;
+        for(const b of bricks){
+          if(!b.alive) continue;
+          if(nx > b.x - ball.r && nx < b.x + b.w + ball.r && ny > b.y - ball.r && ny < b.y + b.h + ball.r){ hit=b; break; }
+        }
+        if(hit){
+          hit.alive=false; destroyed++;
+          const penX=Math.min((hit.x+hit.w+ball.r)-nx,nx-(hit.x-ball.r));
+          const penY=Math.min((hit.y+hit.h+ball.r)-ny,ny-(hit.y-ball.r));
+          if(penX<penY) ball.vx*=-1; else ball.vy*=-1;
+        }
+        ball.x=nx; ball.y=ny;
+        if(destroyed===bricks.length){ end(true); return; }
+        draw(); requestAnimationFrame(step);
+      }
+      function move(e){ const rect=cvs.getBoundingClientRect(); const mx=e.clientX-rect.left; paddle.x=Math.max(0,Math.min(W-paddle.w,mx-paddle.w/2)); }
+      cvs.addEventListener('mousemove', move);
+      $('#breakoutCancel').onclick = ()=> end(false,true);
+      draw();
+
+      // Vänta 1 sekund innan spelet startar
+      ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#212121'; ctx.font='20px system-ui'; ctx.textAlign='center';
+      ctx.fillText('Startar om 1 sekund...', W/2, H/2);
+      setTimeout(()=>{
+        running=true;
+        timer=setInterval(()=>{ timeLeft--; if(timeLeft<=0){ end(false); } },1000);
+        requestAnimationFrame(step);
+      },1000);
+
+      function end(win, manual){
+        if(!running && !manual) return; running=false; clearInterval(timer);
+        cvs.removeEventListener('mousemove', move);
+        ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#212121'; ctx.font='24px system-ui'; ctx.textAlign='center';
+        ctx.fillText(win? 'Du vann! Platsen tas över' : 'Förlust – ingen förändring', W/2, H/2);
+        setTimeout(()=>{ hide('#gameModalBreakout'); }, 2000);
+        if(win) transferSpot(challenger, slot, `(vann minispel: breakout mot ${slot.name})`);
+      }
+    }
+
+    // --- Mini-spel: Måltavlor ---
+    function startGameTargets(slot){
+      const challenger = $('#challengerName').value.trim();
+      if(!challenger){ toast('Skriv ditt namn'); return; }
+      hide('#challengeModal');
+      show('#gameModalTargets');
+      const cvs=$('#targets'), ctx=cvs.getContext('2d');
+      const W=cvs.width,H=cvs.height;
+      let hits=0, timeLeft=8, running=true; // kortare tid
+      let target = spawn();
+      let timer=setInterval(()=>{ timeLeft--; if(timeLeft<=0) end(false); },1000);
+
+      function spawn(){ const r=16+Math.random()*10; return {x:r+Math.random()*(W-2*r), y:r+Math.random()*(H-2*r), r}; }
+      function draw(){
+        ctx.clearRect(0,0,W,H);
+        ctx.fillStyle='#333'; ctx.font='14px system-ui'; ctx.fillText(`Tid: ${timeLeft}s  ·  Träffar: ${hits}/5`,10,18);
+        ctx.beginPath(); ctx.arc(target.x,target.y,target.r,0,Math.PI*2); ctx.fillStyle='#7D212B'; ctx.fill();
+        ctx.beginPath(); ctx.arc(target.x,target.y,target.r*0.6,0,Math.PI*2); ctx.fillStyle='#F7D117'; ctx.fill();
+        ctx.beginPath(); ctx.arc(target.x,target.y,target.r*0.3,0,Math.PI*2); ctx.fillStyle='#212121'; ctx.fill();
+      }
+      function click(e){
+        const rect=cvs.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; const dx=x-target.x, dy=y-target.y;
+        if(Math.hypot(dx,dy)<=target.r){ hits++; target=spawn(); if(hits>=5){ end(true); } else draw(); }
+      }
+      cvs.addEventListener('click', click);
+      $('#targetsCancel').onclick = ()=> end(false,true);
+      draw();
+
+      function end(win, manual){
+        if(!running) return; running=false; clearInterval(timer); cvs.removeEventListener('click', click);
+        const ctx2 = cvs.getContext('2d'); ctx2.fillStyle='rgba(255,255,255,0.85)'; ctx2.fillRect(0,0,W,H);
+        ctx2.fillStyle='#212121'; ctx2.font='24px system-ui'; ctx2.textAlign='center';
+        ctx2.fillText(win? 'Du vann! Platsen tas över' : 'Förlust – ingen förändring', W/2, H/2);
+        setTimeout(()=>{ hide('#gameModalTargets'); }, 2000);
+        if(win) transferSpot(challenger, slot, `(vann minispel: måltavlor mot ${slot.name})`);
+      }
+    }
+
+    // --- Gemensamt: överför plats, topplista ---
+    function transferSpot(challenger, slot, note){
+      const wk = weekKey(currentWeek);
+      const db = DB.load();
+      const idx = challengingSpotIndex;
+      db[wk][idx] = { name: challenger, note, allowGame:true, allowFavor:true, ts: Date.now() };
+      DB.save(db);
+      const lb = DB.lbLoad(); lb[challenger] = (lb[challenger]||0)+1; DB.lbSave(lb);
+      rememberName(challenger);
+      toast(`🎉 ${challenger} tar över plats ${idx+1}!`);
+      render();
+    }
+
+    // --- Övrigt ---
+    function rememberName(name){
+      const list = DB.namesLoad();
+      if(!list.includes(name)){ list.unshift(name); DB.namesSave(list.slice(0,10)); }
+    }
+    function escapeHtml(str){ return (str||'').replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[s])); }
+    function toast(msg){ const t=$('#toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',1800); }
+    function show(sel){ $(sel).style.display='flex'; }
+    function hide(sel){ $(sel).style.display='none'; }
+
+    // Vecko-nav
+    $('#prevWeek').onclick = ()=>{ currentWeek = addDays(currentWeek,-7); render(); };
+    $('#nextWeek').onclick = ()=>{ currentWeek = addDays(currentWeek, 7); render(); };
+    $('#todayBtn').onclick = ()=>{ currentWeek = startOfISOWeek(new Date()); render(); };
+
+    // Export / Import
+    $('#exportBtn').onclick = ()=>{
+      const data = { bookings: DB.load(), challenges: DB.challengesLoad(), leaderboard: DB.lbLoad(), names: DB.namesLoad(), generatedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='lilla-ateljen-bokningar.json'; a.click(); URL.revokeObjectURL(a.href);
+    };
+    $('#importFile').addEventListener('change', e=>{
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader(); reader.onload = ()=>{
+        try{
+          const obj = JSON.parse(reader.result);
+          if(obj.bookings) localStorage.setItem('atelierBookings', JSON.stringify(obj.bookings));
+          if(obj.challenges) localStorage.setItem('atelierChallenges', JSON.stringify(obj.challenges));
+          if(obj.leaderboard) localStorage.setItem('atelierLeaderboard', JSON.stringify(obj.leaderboard));
+          if(obj.names) localStorage.setItem('atelierNames', JSON.stringify(obj.names));
+          toast('Importerad!'); render();
+        }catch(err){ alert('Ogiltig JSON'); }
+      }; reader.readAsText(file);
+    });
+
+    // Init
+    render();
+  </script>
+</body>
+</html>
