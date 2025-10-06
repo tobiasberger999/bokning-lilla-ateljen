@@ -341,6 +341,28 @@
             return true;
           }catch(err){ console.warn('Moln-init misslyckades', err); setStorageChip('local'); return false; }
         },
+        async verifyCode(){
+          try{
+            const _codeHash = await getGateCodeHash();
+            await fs.collection('meta').doc('ping').set({ ts: Date.now(), _codeHash }, { merge: true });
+            return true;
+          }catch(err){
+            try{ localStorage.removeItem('gateCodeHashV2'); }catch(_){ }
+            return false;
+          }
+        },
+        async validateGate(){
+          for(;;){
+            try{
+              const _codeHash = await getGateCodeHash();
+              await fs.collection('meta').doc('gate_check').set({ ts: Date.now(), _codeHash }, { merge: false });
+              return true;
+            }catch(err){
+              try{ localStorage.removeItem('gateCodeHashV2'); }catch(_){ }
+              alert('Nej, det var fel kod. Fråga en kollega eller prova igen.');
+            }
+          }
+        },
         load(){ const wk=currentWeekKey(); ensureWeekSubscription(wk); return { ...bookingsCache }; },
         async save(obj){ const wk=currentWeekKey(); const slots = obj[wk]||Array.from({length:6},()=>null); const _codeHash = await getGateCodeHash(); return fs.collection('bookings').doc(wk).set({slots, _codeHash},{merge:false}); },
         challengesLoad(){ const wk=currentWeekKey(); ensureWeekSubscription(wk); return { [wk]: challengesCache[wk]||[] }; },
