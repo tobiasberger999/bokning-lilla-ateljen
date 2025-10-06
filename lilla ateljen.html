@@ -270,7 +270,7 @@
     async function getGateCodeHash(){
       let h = localStorage.getItem('gateCodeHashV2');
       if(h) return h;
-      const code = prompt('Ange gemensam kod (skiftläges- och accentokänslig):');
+      const code = prompt('Skriv in koden för att komma till bokningen:');
       if(!code) throw new Error('Ingen kod angiven');
       const normalized = normalizeGateCode(code);
       h = await sha256Hex(normalized);
