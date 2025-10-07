@@ -172,6 +172,9 @@
         <label for="gateCode">Skriv in koden för att komma till bokningen</label>
         <input id="gateCode" type="password" placeholder="Kod" autocomplete="one-time-code" />
       </div>
+      <div class="field">
+        <label class="switch"><input type="checkbox" id="toggleGateCode"> <span>Visa kod</span></label>
+      </div>
       <div id="gateError" class="small" style="color:#b71c1c; display:none">Hoppsan, det var fel kod. Fråga en kollega eller prova igen.</div>
       <div class="row">
         <button class="btn primary" id="gateSubmit">Fortsätt</button>
@@ -412,6 +415,8 @@ Cloud.initIfConfigured().then(async enabled=>{
     const codeInput = document.getElementById('gateCode');
     const errorBox = document.getElementById('gateError');
     const submitBtn = document.getElementById('gateSubmit');
+    const toggle = document.getElementById('toggleGateCode');
+    if(toggle){ toggle.addEventListener('change', ()=>{ codeInput.type = toggle.checked ? 'text' : 'password'; }); }
     async function attempt(){
       const normalized = normalizeGateCode(codeInput.value);
       const hash = await sha256Hex(normalized);
