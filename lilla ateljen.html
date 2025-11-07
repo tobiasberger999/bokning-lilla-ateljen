@@ -77,6 +77,9 @@
     .field input[type=text], .field textarea, .field select{width:100%;box-sizing:border-box;background:#fff;border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:10px}
     .switch{display:inline-flex;align-items:center;gap:8px;margin-right:12px}
     .switch input{accent-color:#F7D117}
+    .quiz-option{display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer}
+    .quiz-option input{margin:0}
+    .quiz-option span{font-size:14px}
 
     .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#212121;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.2);display:none;z-index:50}
 
@@ -86,7 +89,7 @@
 <body>
   <div class="container">
     <h1>💻 Lilla ateljén – bokning per vecka</h1>
-    <p class="subtitle">6 platser · 1 vecka åt gången · vissa rolighetsinslag finns 😇</p>
+    <p class="subtitle">6 platser · 1 vecka åt gången · vissa rolighetsinslag finns</p>
 
     <div class="toolbar">
       <div class="week-nav">
@@ -130,6 +133,7 @@
       <div class="field"><label for="note">Anteckning (valfritt)</label><input id="note" type="text" placeholder="t.ex. Behöver tyst för skrivande" /></div>
       <div class="field"><label id="allowLabel">Tillåt andra att utmana denna bokning med…</label>
         <label class="switch" for="allowGame"><input type="checkbox" id="allowGame" aria-labelledby="allowLabel" checked> <span>🎮 minispel</span></label>
+        <label class="switch" for="allowElkQuiz"><input type="checkbox" id="allowElkQuiz" aria-labelledby="allowLabel" checked> <span>🦌 Älg-quiz</span></label>
         <label class="switch" for="allowFavor"><input type="checkbox" id="allowFavor" aria-labelledby="allowLabel"> <span>🤝 tjänst</span></label>
       </div>
       <div class="row">
@@ -215,6 +219,25 @@
       <canvas id="targets" width="560" height="280"></canvas>
       <div class="row">
         <button class="btn" id="targetsCancel">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mini-spel Modal (Älg-quiz) -->
+  <div class="modal-backdrop" id="gameModalElkQuiz">
+    <div class="modal">
+      <h2>🦌 Älg-quiz</h2>
+      <p class="small">Svara på <strong>2 frågor</strong>. Du behöver ha rätt på minst <strong>1</strong> för att vinna.</p>
+      <div id="elkQuizArea">
+        <div id="elkQuizQuestion1" class="field"></div>
+        <div id="elkQuizAnswers1" class="field"></div>
+        <div id="elkQuizQuestion2" class="field" style="margin-top: 20px;"></div>
+        <div id="elkQuizAnswers2" class="field"></div>
+      </div>
+      <div id="elkQuizResult" style="display:none; margin-top: 16px; padding: 12px; border-radius: 10px; background: #f0f0f0;"></div>
+      <div class="row">
+        <button class="btn primary" id="elkQuizSubmit" style="display:none;">Skicka svar</button>
+        <button class="btn" id="elkQuizCancel">Avbryt</button>
       </div>
     </div>
   </div>
@@ -475,6 +498,7 @@ Cloud.initIfConfigured().then(async enabled=>{
 
           const parts = [];
           if(slot.allowGame) parts.push('<span class="pill allow">🎮 minispel</span>');
+          if(slot.allowElkQuiz) parts.push('<span class="pill allow">🦌 älg-quiz</span>');
           if(slot.allowFavor) parts.push('<span class="pill allow">🤝 tjänst</span>');
           if(parts.length){
             const opt = el('div','row small', parts.join(' '));
@@ -553,6 +577,7 @@ Cloud.initIfConfigured().then(async enabled=>{
       $('#yourName').value = defaultName;
       $('#note').value = '';
       $('#allowGame').checked = true;
+      $('#allowElkQuiz').checked = true;
       $('#allowFavor').checked = false;
       show('#bookModal');
       $('#yourName').focus();
@@ -561,7 +586,7 @@ Cloud.initIfConfigured().then(async enabled=>{
     $('#bookSave').onclick = ()=>{
       const name = $('#yourName').value.trim();
       if(!name){ toast('Fyll i ditt namn'); return; }
-      const entry = { name, note: $('#note').value.trim(), allowGame: $('#allowGame').checked, allowFavor: $('#allowFavor').checked, ts: Date.now() };
+      const entry = { name, note: $('#note').value.trim(), allowGame: $('#allowGame').checked, allowElkQuiz: $('#allowElkQuiz').checked, allowFavor: $('#allowFavor').checked, ts: Date.now() };
       const db = DB.load(); const wk = weekKey(currentWeek);
       db[wk] = db[wk] || Array.from({length:6},()=>null);
       db[wk][editingSpotIndex] = entry;
@@ -613,6 +638,17 @@ Cloud.initIfConfigured().then(async enabled=>{
         box.appendChild(el('div','note','Spelutmaningar är avstängda.'));
       }
 
+      if(slot.allowElkQuiz){
+        const quizWrap = el('div','field');
+        quizWrap.innerHTML = '<label>Utmana via Älg-quiz:</label>';
+        const quizBtn = el('button','btn primary','🦌 Älg-quiz');
+        quizBtn.onclick = ()=>startGameElkQuiz(slot);
+        quizWrap.appendChild(quizBtn);
+        box.appendChild(quizWrap);
+      } else {
+        box.appendChild(el('div','note','Älg-quiz är avstängt.'));
+      }
+
       if(slot.allowFavor){
         const area = el('div','field');
         area.innerHTML = '<label for="favorText">Föreslå en tjänst (måste accepteras av bokaren):</label><textarea id="favorText" rows="3" placeholder="t.ex. Jag tar din fredagslunchrond"></textarea>';
@@ -644,7 +680,7 @@ Cloud.initIfConfigured().then(async enabled=>{
       const wk = weekKey(currentWeek);
       const all = DB.challengesLoad(); const row = all[wk][idx];
       const db = DB.load(); db[wk] = db[wk]||Array.from({length:6},()=>null);
-      db[wk][row.spot] = { name: row.from, note:`(vann via tjänst från ${row.to})`, allowGame:true, allowFavor:true, ts: Date.now() };
+      db[wk][row.spot] = { name: row.from, note:`(vann via tjänst från ${row.to})`, allowGame:true, allowElkQuiz:true, allowFavor:true, ts: Date.now() };
       DB.save(db);
       all[wk].splice(idx,1); DB.challengesSave(all);
       toast(`Tjänst accepterad – ${row.from} har nu plats ${row.spot+1}`);
@@ -810,12 +846,134 @@ Cloud.initIfConfigured().then(async enabled=>{
       }
     }
 
+    // --- Älg-quiz ---
+    // Konfiguration: Ange din fråga här
+    const ELK_QUIZ_CONFIG = {
+      question1: {
+        text: "Vad kallas en älghane för?",
+        answers: ["Tjur", "Hane", "Bock", "Stor"],
+        correctIndex: 0 // "Tjur" är rätt svar
+      },
+      question2: {
+        text: "Vad heter älg på latin?",
+        answers: ["Fortes fortes – från ordet för styrka", "Rex Romanorum – skogarnas konung", "Alces alces – från utbrett drickande under älgjakten", "Mosus mosus – Moses ursprungliga benämning på arten"],
+        correctIndex: 2
+      }
+    };
+
+    function startGameElkQuiz(slot){
+      const challenger = $('#challengerName').value.trim();
+      if(!challenger){ toast('Skriv ditt namn'); return; }
+      if(!slot.allowElkQuiz){ toast('Älg-quiz är avstängt för denna bokning'); return; }
+      hide('#challengeModal');
+      show('#gameModalElkQuiz');
+
+      const q1Div = $('#elkQuizQuestion1');
+      const a1Div = $('#elkQuizAnswers1');
+      const q2Div = $('#elkQuizQuestion2');
+      const a2Div = $('#elkQuizAnswers2');
+      const resultDiv = $('#elkQuizResult');
+      const submitBtn = $('#elkQuizSubmit');
+
+      // Rensa tidigare innehåll
+      q1Div.innerHTML = '';
+      a1Div.innerHTML = '';
+      q2Div.innerHTML = '';
+      a2Div.innerHTML = '';
+      resultDiv.style.display = 'none';
+      submitBtn.style.display = 'block';
+
+      // Fråga 1
+      const q1Label = el('label', null, escapeHtml(ELK_QUIZ_CONFIG.question1.text));
+      q1Div.appendChild(q1Label);
+      const q1Answers = [];
+      ELK_QUIZ_CONFIG.question1.answers.forEach((ans, idx) => {
+        const option = el('label', 'quiz-option');
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'elkQuizQ1';
+        input.value = idx;
+        const text = document.createElement('span');
+        text.textContent = ans;
+        option.appendChild(input);
+        option.appendChild(text);
+        a1Div.appendChild(option);
+        q1Answers.push(input);
+      });
+
+      // Fråga 2
+      const q2Label = el('label', null, escapeHtml(ELK_QUIZ_CONFIG.question2.text));
+      q2Div.appendChild(q2Label);
+      const q2Answers = [];
+      ELK_QUIZ_CONFIG.question2.answers.forEach((ans, idx) => {
+        const option = el('label', 'quiz-option');
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'elkQuizQ2';
+        input.value = idx;
+        const text = document.createElement('span');
+        text.textContent = ans;
+        option.appendChild(input);
+        option.appendChild(text);
+        a2Div.appendChild(option);
+        q2Answers.push(input);
+      });
+
+      let answered = false;
+
+      submitBtn.onclick = () => {
+        if(answered) return;
+        const ans1 = q1Answers.find(r => r.checked);
+        const ans2 = q2Answers.find(r => r.checked);
+
+        if(!ans1 || !ans2){
+          toast('Svara på båda frågorna');
+          return;
+        }
+
+        answered = true;
+        const correct1 = parseInt(ans1.value) === ELK_QUIZ_CONFIG.question1.correctIndex;
+        const correct2 = parseInt(ans2.value) === ELK_QUIZ_CONFIG.question2.correctIndex;
+        const score = (correct1 ? 1 : 0) + (correct2 ? 1 : 0);
+        const won = score >= 1;
+
+        resultDiv.style.display = 'block';
+        resultDiv.style.background = won ? '#e8f5e9' : '#ffebee';
+        resultDiv.style.border = `1px solid ${won ? '#c8e6c9' : '#ffcdd2'}`;
+        resultDiv.innerHTML = `
+          <div style="font-weight: 600; margin-bottom: 8px;">
+            ${won ? '🎉 Du vann!' : '❌ Du förlorade'}
+          </div>
+          <div style="font-size: 13px;">
+            Fråga 1: ${correct1 ? '✅ Rätt' : '❌ Fel'} (${ELK_QUIZ_CONFIG.question1.answers[ELK_QUIZ_CONFIG.question1.correctIndex]})<br>
+            Fråga 2: ${correct2 ? '✅ Rätt' : '❌ Fel'} (${ELK_QUIZ_CONFIG.question2.answers[ELK_QUIZ_CONFIG.question2.correctIndex]})<br>
+            <strong>Totalt: ${score}/2 rätt</strong>
+          </div>
+        `;
+
+        submitBtn.style.display = 'none';
+
+        setTimeout(() => {
+          hide('#gameModalElkQuiz');
+          if(won){
+            transferSpot(challenger, slot, `(vann älg-quiz mot ${slot.name})`);
+          } else {
+            toast('Utmaning misslyckades – ingen förändring');
+          }
+        }, 2500);
+      };
+
+      $('#elkQuizCancel').onclick = () => {
+        hide('#gameModalElkQuiz');
+      };
+    }
+
     // --- Gemensamt: överför plats, topplista ---
     function transferSpot(challenger, slot, note){
       const wk = weekKey(currentWeek);
       const db = DB.load();
       const idx = challengingSpotIndex;
-      db[wk][idx] = { name: challenger, note, allowGame:true, allowFavor:true, ts: Date.now() };
+      db[wk][idx] = { name: challenger, note, allowGame:true, allowElkQuiz:true, allowFavor:true, ts: Date.now() };
       DB.save(db);
       const lb = DB.lbLoad(); lb[challenger] = (lb[challenger]||0)+1; DB.lbSave(lb);
       rememberName(challenger);
