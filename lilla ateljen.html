@@ -130,7 +130,7 @@
     <div class="modal">
       <h2 id="bookTitle">Boka plats</h2>
       <div class="field"><label for="yourName">Ditt namn</label><input id="yourName" type="text" placeholder="t.ex. Tobias Berger" /></div>
-      <div class="field"><label for="note">Anteckning (valfritt)</label><input id="note" type="text" placeholder="t.ex. Behöver tyst för skrivande" /></div>
+      <div class="field"><label for="note">Anteckning (valfritt)</label><input id="note" type="text" placeholder="t.ex. Behöver kunna stämma av lite saker med kollegor" /></div>
       <div class="field"><label id="allowLabel">Tillåt andra att utmana denna bokning med…</label>
         <label class="switch" for="allowGame"><input type="checkbox" id="allowGame" aria-labelledby="allowLabel" checked> <span>🎮 minispel</span></label>
         <label class="switch" for="allowElkQuiz"><input type="checkbox" id="allowElkQuiz" aria-labelledby="allowLabel" checked> <span>🦌 Älg-quiz</span></label>
@@ -651,7 +651,7 @@ Cloud.initIfConfigured().then(async enabled=>{
 
       if(slot.allowFavor){
         const area = el('div','field');
-        area.innerHTML = '<label for="favorText">Föreslå en tjänst (måste accepteras av bokaren):</label><textarea id="favorText" rows="3" placeholder="t.ex. Jag tar din fredagslunchrond"></textarea>';
+        area.innerHTML = '<label for="favorText">Föreslå en tjänst (måste accepteras av bokaren):</label><textarea id="favorText" rows="3" placeholder="t.ex. Jag tar Kauresearch nästa vecka"></textarea>';
         box.appendChild(area);
         const send = el('button','btn','Skicka tjänstförfrågan');
         send.onclick = ()=>sendFavor(slot.name);
